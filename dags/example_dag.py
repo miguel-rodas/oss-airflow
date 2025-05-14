@@ -3,7 +3,7 @@ from pendulum import datetime
 
 # Define the DAG with decorator
 @dag(
-    schedule_interval="@daily",
+    schedule="@daily",
     start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=["example", "demo"],
