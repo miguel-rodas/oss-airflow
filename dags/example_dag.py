@@ -1,10 +1,10 @@
 from airflow.decorators import dag, task
-from airflow.utils.dates import days_ago
+from pendulum import datetime
 
 # Define the DAG with decorator
 @dag(
     schedule_interval="@daily",
-    start_date=days_ago(1),
+    start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=["example", "demo"],
 )
