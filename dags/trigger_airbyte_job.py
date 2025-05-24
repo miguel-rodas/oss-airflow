@@ -6,7 +6,7 @@ from airflow.sensors.python import PythonSensor
 from datetime import timedelta
 import requests
 
-AIRBYTE_CONN_ID = "airbyte_http_conn"
+AIRBYTE_CONN_ID = "airbyte_conn"
 CONNECTION_ID = "945e32f7-b483-4436-b195-371e120f28e8"
 
 default_args = {
