@@ -42,21 +42,8 @@ def trigger_airbyte_sync_http():
         do_xcom_push=True,  # Needed to access output later
     )
 
-    def check_airbyte_job():
-        from airflow.models.xcom import XCom
-        from airflow.utils.session import provide_session
-
-        @provide_session
-        def get_job_id_from_xcom(session=None):
-            return XCom.get_one(
-                execution_date="{{ ds }}",
-                key="return_value",
-                task_id="trigger_airbyte_sync",
-                dag_id="trigger_airbyte_sync_http",
-                session=session
-            )
-
-        job_id = get_job_id_from_xcom()
+    def check_airbyte_job(**context):
+        job_id = context['ti'].xcom_pull(task_ids="trigger_airbyte_sync")
         if not job_id:
             return False
 
@@ -72,6 +59,7 @@ def trigger_airbyte_sync_http():
     wait_for_sync = PythonSensor(
         task_id="wait_for_airbyte_sync",
         python_callable=check_airbyte_job,
+        provide_context=True,
         poke_interval=30,
         timeout=3600,
         mode="poke"
