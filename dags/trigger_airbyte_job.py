@@ -1,13 +1,12 @@
-from airflow.decorators import dag, task
+from airflow.decorators import dag
 from pendulum import datetime
 from airflow.operators.empty import EmptyOperator
 from airflow.providers.http.operators.http import HttpOperator
 from airflow.sensors.python import PythonSensor
 from datetime import timedelta
 import requests
-import time
 
-AIRBYTE_CONN_ID = "airbyte_http_conn"  # Define this in Airflow as an HTTP connection
+AIRBYTE_CONN_ID = "airbyte_http_conn"
 CONNECTION_ID = "945e32f7-b483-4436-b195-371e120f28e8"
 
 default_args = {
@@ -29,7 +28,6 @@ default_args = {
     tags=["airbyte", "http-api"],
 )
 def trigger_airbyte_sync_http():
-
     start = EmptyOperator(task_id="start")
 
     trigger_sync = HttpOperator(
@@ -40,26 +38,47 @@ def trigger_airbyte_sync_http():
         data={"connectionId": CONNECTION_ID},
         headers={"Content-Type": "application/json"},
         response_filter=lambda response: response.json()["job"]["id"],
-        log_response=True
+        log_response=True,
+        do_xcom_push=True,  # Needed to access output later
     )
 
-    @task(poll_interval=30, timeout=3600, retries=0)
-    def wait_for_airbyte_sync(job_id: int):
-        url = f"http://airbyte.airbyte.svc.cluster.local:8001/api/v1/jobs/get"
-        while True:
-            res = requests.post(url, json={"id": job_id})
-            status = res.json()["job"]["status"]
-            if status in ["succeeded", "failed", "cancelled"]:
-                if status != "succeeded":
-                    raise Exception(f"Airbyte job failed with status: {status}")
-                return
-            time.sleep(30)
+    def check_airbyte_job():
+        from airflow.models.xcom import XCom
+        from airflow.utils.session import provide_session
+
+        @provide_session
+        def get_job_id_from_xcom(session=None):
+            return XCom.get_one(
+                execution_date="{{ ds }}",
+                key="return_value",
+                task_id="trigger_airbyte_sync",
+                dag_id="trigger_airbyte_sync_http",
+                session=session
+            )
+
+        job_id = get_job_id_from_xcom()
+        if not job_id:
+            return False
+
+        url = "http://airbyte.airbyte.svc.cluster.local:8001/api/v1/jobs/get"
+        response = requests.post(url, json={"id": job_id})
+        status = response.json()["job"]["status"]
+        if status in ["succeeded", "failed", "cancelled"]:
+            if status != "succeeded":
+                raise Exception(f"Airbyte job failed with status: {status}")
+            return True
+        return False
+
+    wait_for_sync = PythonSensor(
+        task_id="wait_for_airbyte_sync",
+        python_callable=check_airbyte_job,
+        poke_interval=30,
+        timeout=3600,
+        mode="poke"
+    )
 
     end = EmptyOperator(task_id="end")
 
-    job_id = trigger_sync.output  # job_id passed to sensor
-    sync_status = wait_for_airbyte_sync(job_id)
-
-    start >> trigger_sync >> sync_status >> end
+    start >> trigger_sync >> wait_for_sync >> end
 
 dag = trigger_airbyte_sync_http()
