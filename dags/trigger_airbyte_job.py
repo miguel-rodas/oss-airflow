@@ -1,7 +1,7 @@
 from airflow.decorators import dag, task
 from pendulum import datetime
 from airflow.operators.empty import EmptyOperator
-from airflow.providers.http.operators.http import SimpleHttpOperator
+from airflow.operators.http_operator import SimpleHttpOperator
 from airflow.sensors.python import PythonSensor
 from datetime import timedelta
 import requests
