@@ -32,7 +32,7 @@ def trigger_airbyte_sync_http():
 
     start = EmptyOperator(task_id="start")
 
-    trigger_sync = SimpleHttpOperator(
+    trigger_sync = HttpOperator(
         task_id="trigger_airbyte_sync",
         http_conn_id=AIRBYTE_CONN_ID,
         endpoint="api/v1/connections/sync",
